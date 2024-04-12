@@ -51,6 +51,18 @@
         "xstddef": "cpp",
         "xstring": "cpp",
         "xutility": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "array": "cpp",
+        "*.tcc": "cpp",
+        "cstdarg": "cpp",
+        "cwctype": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "optional": "cpp",
+        "string_view": "cpp",
+        "fstream": "cpp",
+        "sstream": "cpp",
+        "variant": "cpp",
+        "any": "cpp"
     }
 }

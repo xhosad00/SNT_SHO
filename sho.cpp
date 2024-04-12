@@ -7,45 +7,52 @@
  */
 
 #include "discreteSim.cpp"
-#include <iostream>
-#include <random>
-#include <string>
+
+// using namespace discSim;
+
+const bool VERBOSE = true;
 
 
 
-using namespace discSim;
 
 
 
-unsigned int SEED = 5; //random number from Hardware
-// TODo parse from args? gen seed at random
-
-double uniformDis(double a, double b)
+struct structExample1
 {
-    static std::default_random_engine gen(SEED);
-    std::uniform_real_distribution<double> dis(a, b);
+    int x, y;
+};
+struct structExample2
+{
+    std::string name;
+    double val;
+};
 
-    return dis(gen);
+void testBehavior(Process* p, int state) 
+{
+    int x = 0;
+    switch ((state))
+    {
+    case 0:
+        std::cout << "Behavior, state: " << state << std::endl;
+        p->sim->activate(p->id, 1);
+        // std::cout << p->sim->time;
+        break;
+    case 1:
+        std::cout << "Behavior2, state: " << state << std::endl;
+        p->sim->waitFor(p->id, 2, 3.5);
+        break;
+    case 2:
+        std::cout << "Behavior3, state: " << state << std::endl;
+        break;
+    
+    default:
+        break;
+    }    
 }
 
-double expDis(double lambd)
+void testBehaviorPrint(Process* p, int state) 
 {
-    static std::default_random_engine gen(SEED);
-    std::exponential_distribution<double> dis(lambd);
-
-    return dis(gen);
-}
-
-double normalDis(double mean, double stddev)
-{
-    static std::default_random_engine gen(SEED);
-    std::normal_distribution<double> dis(mean, stddev);
-    return dis(gen);
-}
-
-
-void testBehavior(int state) {
-    std::cout << "Behavior function, state: " << state << std::endl;
+    std::cout << "Behavior PRINT, state: " << state << std::endl;
 }
 
 
@@ -53,19 +60,23 @@ void testBehavior(int state) {
 int main(int argc, char* argv[])
 {
     Simulation* sim = new Simulation();
-    Event e1 = Event (0, 1, -1, 5, 20, 2);
-    Event e2 = Event (1, 1, -1, 5, 20, 1);
 
     sim->createProcess(testBehavior, 0);
+    Facility f0(0, "Shopping", 10, Facility::GenType::Normal, 10, 5);
+    sim->createFacility(f0);
 
     while (!sim->finished())
     {
         Event e = sim->nextEvent();
-        sim->executeEvent(e);
+        if (e.canProcessEvent())
+        {
+            if (VERBOSE)
+                printf("%2.1lf: Executing Process:%d\n", sim->getTime(), e.processID);
+            sim->executeEvent(e);
+        }
     }
 
-    Facility f1 = Facility("fac1", 3);
-    // std::cout << f1;
+
 
     std::cout << "Ending main\n";
     return 0;
