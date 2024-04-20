@@ -56,7 +56,7 @@ unsigned int SEED = 5; //random number from Hardware
 
     bool Event::isProcessEvent()
     {
-        return processID != IgnoreID;
+        return processID != IgnoreID && facilityID == IgnoreID;
     }
 
     bool Event::isFacilityEvent()
@@ -65,7 +65,7 @@ unsigned int SEED = 5; //random number from Hardware
     }
 
     
-    Process::Process(int st, void (*b)(Process *, int), Simulation *sm, void *data)
+    Process::Process(int st, void (*b)(Process *, void*), Simulation *sm, void *data)
     {
             static int IDcntr = 0;
             id = IDcntr;
@@ -75,7 +75,7 @@ unsigned int SEED = 5; //random number from Hardware
             data = data;
     }
 
-    void Process::setBehavior(void (*function)(Process *, int))
+    void Process::setBehavior(void (*function)(Process *, void*))
     {
         behav = function;
     }
@@ -84,7 +84,7 @@ unsigned int SEED = 5; //random number from Hardware
     {
         if (behav) 
         {
-            behav(this, this->state);
+            behav(this, &this->state);
         }
         else
         {
@@ -92,16 +92,18 @@ unsigned int SEED = 5; //random number from Hardware
         }        
     }
 
+    void Process::seize(int facID, int nextState, int prio)
+    {
+        this->sim->seizeFacility(this->id, nextState, facID, prio);
+    }
+
     Facility::Facility(int id, std::string n, int cap, GenType g, double a, double b) : id(id), name(n), capacity(cap), gen(g), a(a), b(b)
     {
         stats.processCnt = 0;
         stats.waitTimeTotal = 0;
         stats.usedTimeTotal = 0;
-
-        // if (name == "") // no name, set it to ID
-        // {
-        //     name = std::to_string(id);
-        // }
+        if (gen == GenType::Uniform && a > b)
+            throw std::invalid_argument("Uniform distribution attribute 'a' cannot be less than 'b'");
     }
 
     int Facility::getId()
@@ -109,21 +111,49 @@ unsigned int SEED = 5; //random number from Hardware
         return this->id;
     }
 
-    // std::ostream &operator<<(std::ostream &os, const Facility &f) // override print funciton
-    // {
-    //     os << "Facility: " << f.name << "\n  processCnt   :" << f.stats.processCnt << "\n  waitTimeTotal:" << f.stats.waitTimeTotal << "\n  usedTimeTotal:" << f.stats.usedTimeTotal << "\n";
-    //     return os;
-    // }
+    std::ostream &operator<<(std::ostream &os, const Facility &f) // override print funciton
+    {
+        os << "Facility: " << f.name << "\n  processCnt   :" << f.stats.processCnt << "\n  waitTimeTotal:" << f.stats.waitTimeTotal << "\n  usedTimeTotal:" << f.stats.usedTimeTotal << "\n";
+        return os;
+    }
 
+
+    void Facility::ProcessExit(Process *proc, Event e)
+    {
+        //TODO stats
+        // std::cout << " Executing process: " << proc->id << "  " << proc->state << "->" << e.processNextState << "\n";
+        proc->state = e.processNextState;
+        proc->doBehavior();
+    }
+
+    double Facility::generateTime()
+    {
+        switch(this->gen)
+        {
+            case Facility::GenType::Exp:
+                return expDis(this->a);
+
+            case Facility::GenType::Normal:
+                return normalDis(this->a, this->b);
+
+            case Facility::GenType::Uniform:
+            default:
+                return uniformDis(this->a, this->b);
+                break;
+        }
+    }
     
-    // void Facility::processEnter(const Process &proc)
-    // {
-        
-    // };
+    void Facility::activateProcess(Process* proc, int nextState)
+    {
+        double delay = generateTime();
+        double time = proc->sim->getTime();
+        if (proc)
+        {
+            proc->sim->addFacilityEvent(proc->id, nextState, this->id, time + delay, EXIT_FACILITY_PRIO, time); 
+        }
 
+    };
 
-
-    
     Simulation::Simulation()
     {
         time = 0;
@@ -154,11 +184,17 @@ unsigned int SEED = 5; //random number from Hardware
     //     calendar.push(e);
     // }
 
-    // void Simulation::addProcessEvent(int processID, int processNextState, int startTime, int priority, double timeCreated)
-    // {
-    //     // Event e = Event(processID, IgnoreID, startTime, priority, this->time);
-    //     // calendar.push(e);
-    // }
+    void Simulation::addProcessEvent(int processID, int processNextState, double startTime, int priority, double timeCreated)
+    {
+        Event e = Event(processID, processNextState, IgnoreID, startTime, priority, this->time);
+        calendar.push(e);
+    }
+
+    void Simulation::addFacilityEvent(int processID, int processNextState, int facilityID, double startTime, int priority, double timeCreated)
+    {
+        Event e = Event(processID, processNextState, facilityID, startTime, priority, timeCreated);
+        calendar.push(e);
+    }
 
     Event Simulation::nextEvent()
     {
@@ -170,12 +206,12 @@ unsigned int SEED = 5; //random number from Hardware
 
     bool Simulation::finished()
     {
-        return calendar.empty() || this->time > this->endTime;
+        return calendar.empty() || (this->endTime > 0 && this->time > this->endTime);
     }
 
-    void Simulation::createProcess(void (*behav)(Process*, int), int state, int prio, void* data) 
+    void Simulation::createProcess(void (*behav)(Process*, void*), int state, int prio, void* data) 
     {
-        Process p = Process(state, behav, this, data);
+        Process p = Process(state, behav, this, nullptr);
         procMap.emplace(p.id, p);
         // procMap[p.id] = p;
         calendar.emplace(p.id, state, IgnoreID, this->time, prio, this->time); 
@@ -199,10 +235,26 @@ unsigned int SEED = 5; //random number from Hardware
                 p.doBehavior();
             }
         }
-        else // facility event
+        else if (e.isFacilityEvent())
         {
-
+            std::unordered_map<int, Facility>::iterator fi = facMap.find(e.facilityID);
+            std::unordered_map<int, Process>::iterator pi = procMap.find(e.processID);
+            if (fi == facMap.end())
+            {
+                std::cerr << " Could not find Facility: " << e.processID << "  in execute\n";
+            }
+            else if (pi == procMap.end())
+            {
+                std::cerr << " Could not find process: " << e.processID << "  in execute\n";
+            }
+            else
+            {
+                auto f = fi->second;
+                Process* p = &pi->second;
+                f.ProcessExit(p, e); // TODO test
+            }
         }
+        //TODO generic event?
     }
 
     void Simulation::activate(int processID, int state, int prio)
@@ -227,10 +279,54 @@ unsigned int SEED = 5; //random number from Hardware
         calendar.emplace(p.id, state, IgnoreID, this->time + delay, prio, this->time);         
     }
 
+    void Simulation::seizeFacility(int processID, int state, int facilityID, int prio)
+    {
+        std::unordered_map<int, Facility>::iterator fi = facMap.find(facilityID); // TODO switch to find
+        std::unordered_map<int, Process>::iterator pi = procMap.find(processID);
+        if (fi == facMap.end())
+        {
+            std::cerr << " Could not find Facility: " << facilityID << "  in seizeFacility\n";
+        }
+        else if (pi == procMap.end())
+        {
+            std::cerr << " Could not find process: " << processID << "  in seizeFacility\n";
+        }
+        else
+        {
+            Facility* f = &fi->second;
+            Process* p = &pi->second;
+            
+            f->stats.processCnt++;
+            if (f->capacity > 0) // processed starts working
+            {
+                f->capacity--;
+                f->activateProcess(p, state);
+                
+            }
+            else    //enter queue
+            {            
+                Facility::ProcInQueue pq = {p, state};
+                f->q.push(pq);
+            }
+            // 
+        }
+    }
+
     void Simulation::createFacility(Facility f)
     {
         // faci.emplace(p.id, state, IgnoreID, this->time, prio, this->time); 
         this->facMap.emplace(f.getId(), f);
+    }
+
+    Facility *Simulation::findFacility(int id)
+    {
+        std::unordered_map<int, Facility>::iterator fi = facMap.find(id); 
+        if (fi == facMap.end())
+        {
+            std::cerr << " Could not find Facility: " << id << "\n";
+            return nullptr;
+        }
+        return &fi->second;
     }
 
     // std::shared_ptr<Simulation> Simulation::create()

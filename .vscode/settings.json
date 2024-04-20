@@ -64,5 +64,6 @@
         "sstream": "cpp",
         "variant": "cpp",
         "any": "cpp"
-    }
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

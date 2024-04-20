@@ -15,15 +15,17 @@
 #include <random>
 #include <string>
 #include <unordered_map>
-#include <type_traits>
+#include <stdexcept>
 
 
 
 // namespace discSim 
 // {
     
-    const int CREATE_PROCESS_PRIO = 50;
-    const int ACTIVATY_PROCESS_PRIO = 50;
+    const int CREATE_PROCESS_PRIO = 60;
+    const int ACTIVATE_PROCESS_PRIO = 50;
+    const int SEIZE_FACILITY_PRIO = 20;
+    const int EXIT_FACILITY_PRIO = 30;
 
     
     double uniformDis(double a, double b);
@@ -65,13 +67,15 @@
         int id;
         int state = 0;
         void* data;
-        void (*behav)(Process*, int);
+        void (*behav)(Process*, void* data);
         Simulation* sim;
+        void* buffer;
 
-        Process(int st, void (*b)(Process*, int), Simulation* sm = nullptr, void* data = nullptr);
+        Process(int st, void (*b)(Process*, void*), Simulation* sm = nullptr, void* data = nullptr);
 
-        void setBehavior(void (*function)(Process*, int));
+        void setBehavior(void (*function)(Process*, void*));
         void doBehavior();
+        void seize(int facID, int nextState, int prio = SEIZE_FACILITY_PRIO);
     };
 
 
@@ -85,14 +89,20 @@
         friend std::ostream& operator<<(std::ostream& os, const Facility& f);
         int getId();
 
-        // void processEnter(const Process& proc);
+        void activateProcess(Process* proc, int nextState);
+        void ProcessExit(Process* proc, Event e);
         
-    private:
+    
         struct FacilityStats
         {
             int processCnt;
             int waitTimeTotal;
             int usedTimeTotal;
+        };
+        struct ProcInQueue
+        {
+            Process* p;
+            int processNextState;
         };
 
         int id;
@@ -102,9 +112,10 @@
         //gen type and values for generating
         GenType gen;
         double a;
-        double b;
-        
-        std::queue<int> q; //queue of Process IDs that wish to enter
+        double b;        
+        std::queue<ProcInQueue> q; //queue of Process IDs that wish to enter
+
+        double generateTime();
     };
 
 
@@ -128,20 +139,23 @@
 
         // void addEvent(int processID, int processNextState, int facilityID, double startTime, int priority, double timeCreated);
         // void addEvent(Event e);
-        // void addProcessEvent(int processID, int processNextState, int startTime, int priority, double timeCreated);
+        void addProcessEvent(int processID, int processNextState, double startTime, int priority, double timeCreated);
+        void addFacilityEvent(int processID, int processNextState, int facilityID, double startTime, int priority, double timeCreated);
         Event nextEvent();
         bool finished();
 
-        void createProcess(void (*behav)(Process*, int), int state = 0, int prio = CREATE_PROCESS_PRIO, void* data = nullptr);
+        void createProcess(void (*behav)(Process*, void*), int state = 0, int prio = CREATE_PROCESS_PRIO, void* data = nullptr);
         // void createProcessDelayed(void (*behav)(Process*, int), int state = 0, int prio = CREATE_PROCESS_PRIO, double delay = 0);
         void executeEvent(Event e);
 
-        void activate(int processID, int state,  int prio = ACTIVATY_PROCESS_PRIO);
-        void waitFor(int processID, int state, double delay,  int prio = ACTIVATY_PROCESS_PRIO);
-        // void sleepUntil(int processID, int state, double start,  int prio = ACTIVATY_PROCESS_PRIO);
+        void activate(int processID, int state,  int prio = ACTIVATE_PROCESS_PRIO);
+        void waitFor(int processID, int state, double delay,  int prio = ACTIVATE_PROCESS_PRIO);
+        // void sleepUntil(int processID, int state, double start,  int prio = ACTIVATE_PROCESS_PRIO);
+        void seizeFacility(int processID, int state, int facilityID,  int prio = SEIZE_FACILITY_PRIO);
         
 
         void createFacility(Facility f);
+        Facility* findFacility(int id);
         // static std::shared_ptr<Simulation> create();
         
         // ~Simulation(); //TODO
