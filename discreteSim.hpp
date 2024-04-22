@@ -18,7 +18,7 @@
 #include <stdexcept>
 
 
-
+extern const bool Verbose; // Declare the extern variable
 // namespace discSim 
 // {
     
@@ -91,18 +91,20 @@
 
         void activateProcess(Process* proc, int nextState);
         void ProcessExit(Process* proc, Event e);
+        void printStats();
         
     
         struct FacilityStats
         {
             int processCnt;
-            int waitTimeTotal;
-            int usedTimeTotal;
+            double waitTimeTotal;
+            double workTimeTotal;
         };
         struct ProcInQueue
         {
             Process* p;
             int processNextState;
+            double enteredQueueTime;
         };
 
         int id;
@@ -145,20 +147,20 @@
         bool finished();
 
         void createProcess(void (*behav)(Process*, void*), int state = 0, int prio = CREATE_PROCESS_PRIO, void* data = nullptr);
-        // void createProcessDelayed(void (*behav)(Process*, int), int state = 0, int prio = CREATE_PROCESS_PRIO, double delay = 0);
-        void executeEvent(Event e);
+        void createProcessDelayed(double delay, void (*behav)(Process*, void*), int state = 0, int prio = CREATE_PROCESS_PRIO, void* data = nullptr);
+        bool createProcessAtTime(double time, void (*behav)(Process*, void*), int state = 0, int prio = CREATE_PROCESS_PRIO, void* data = nullptr);;
+        Event* executeEvent(Event e);
 
         void activate(int processID, int state,  int prio = ACTIVATE_PROCESS_PRIO);
         void waitFor(int processID, int state, double delay,  int prio = ACTIVATE_PROCESS_PRIO);
-        // void sleepUntil(int processID, int state, double start,  int prio = ACTIVATE_PROCESS_PRIO);
         void seizeFacility(int processID, int state, int facilityID,  int prio = SEIZE_FACILITY_PRIO);
         
 
         void createFacility(Facility f);
+        void createFacility(int id, std::string n, int cap, Facility::GenType g, double a, double b);
         Facility* findFacility(int id);
-        // static std::shared_ptr<Simulation> create();
+        void printFacilitysStats();
         
-        // ~Simulation(); //TODO
     };
 
 

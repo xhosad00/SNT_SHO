@@ -6,14 +6,11 @@
  * 
  */
 
-#include "discreteSim.cpp"
+#include "discreteSim.hpp"
 
 // using namespace discSim;
 
-const bool VERBOSE = true;
-
-
-
+const bool Verbose = true;
 
 
 
@@ -31,7 +28,6 @@ void testBehavior(Process* p, void* data)
 {
     int state = p->state;
     // int facilityID = static_cast<int>*data;
-    int x = 0;
     switch ((state))
     {
     case 0:
@@ -57,32 +53,23 @@ void testBehavior(Process* p, void* data)
 void testBehaviorFac(Process* p, void* data) 
 {
     int state = p->state;
-    // int facilityID = static_cast<int>*data;
-    int x = 0;
+    const int facilityID = 10;
     switch ((state))
     {
     case 0:
-        std::cout << " state: " << state << std::endl;
-        p->seize(10, 1, 20);
+    {   
+        // std::cout << " state: " << state << std::endl;
+        const int nextState = 1;
+        const int seizePrio = 20;
+        p->seize(facilityID, nextState, seizePrio);
         break;
+    }
     case 1:
-        std::cout << " state: " << state << std::endl;    
+        // std::cout << " state: " << state << std::endl;    
     default:
         break;
     }    
 }
-
-// void testBehaviorPrint(Process* p, void* data) 
-// {
-//     int state = (int)*data;
-//     std::cout << "Behavior PRINT, state: " << state << std::endl;
-// }
-
-// void testFacility(Process* p, void* data) 
-// {
-//     int state = (int)*data;
-//     std::cout << "Behavior PRINT, state: " << state << std::endl;
-// }
 
 
 int main(int argc, char* argv[])
@@ -91,23 +78,23 @@ int main(int argc, char* argv[])
     int initState = 0;
 
     sim->createProcess(testBehaviorFac, initState);
-    Facility f0(10, "Shopping", 3, Facility::GenType::Uniform, 1, 5);
-    sim->createFacility(f0);
+    sim->createProcessAtTime(5, testBehaviorFac, initState);
+    // Facility f0 = Facility;
+    sim->createFacility(10, "Shopping", 1, Facility::GenType::Uniform, 8, 10);
+    sim->createProcessAtTime(5, testBehaviorFac, initState, 100);
 
     while (!sim->finished())
     {
         Event e = sim->nextEvent();
         if (e.canProcessEvent())
         {
-            if (VERBOSE)
-                int id = e.processID;
-                printf("%2.1lf: Executing Process:%d\n", e.startTime, e.processID);
-                int x = 2 + 3;
+            if (Verbose)
+                printf("%2.1lf: Proc:%d\n", e.startTime, e.processID);
             sim->executeEvent(e);
         }
     }
 
-
+    sim->printFacilitysStats();
 
     std::cout << "Ending main\n";
     return 0;

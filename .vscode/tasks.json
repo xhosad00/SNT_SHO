@@ -5,7 +5,7 @@
       "label": "build",
       "type": "shell",
       "command": "g++",
-      "args": ["-std=c++17", "-g", "sho.cpp", "discreteSim.hpp", "-o", "sho.exe"], //, "-Wall"
+      "args": ["-std=c++17", "-g", "sho.cpp", "discreteSim.cpp", "-o", "sho.exe"], //, "-Wall"
       "group": {
         "kind": "build",
         "isDefault": true

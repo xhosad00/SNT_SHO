@@ -38,6 +38,16 @@ unsigned int SEED = 5; //random number from Hardware
         return dis(gen);
     }
 
+    /**
+     * @brief Construct a new Event:: Event object
+     * 
+     * @param proc process ID or -1 if custom event
+     * @param next next process state or -1 if custom event
+     * @param fac facility ID or -1 if (not facility process or custom event)
+     * @param start start time
+     * @param prio event priority
+     * @param created 
+     */
     Event::Event(int proc, int next, int fac, double start, int prio, double created) : processID(proc), processNextState(next), facilityID(fac), startTime(start), priority(prio), timeCreated(created){};
     Event::Event() // create an empty event
     {
@@ -49,6 +59,12 @@ unsigned int SEED = 5; //random number from Hardware
         timeCreated = -1;
     }
 
+    /**
+     * @brief if can process event 
+     * 
+     * @return true if is process or facility event
+     * @return false if custom event
+     */
     bool Event::canProcessEvent()
     {
         return this->isProcessEvent() || this->isFacilityEvent();
@@ -64,7 +80,14 @@ unsigned int SEED = 5; //random number from Hardware
         return facilityID != IgnoreID;
     }
 
-    
+    /**
+     * @brief Construct a new Process:: Process object
+     * 
+     * @param st start state
+     * @param b behavior function
+     * @param sm pointer to Simulation
+     * @param data aditional process data
+     */
     Process::Process(int st, void (*b)(Process *, void*), Simulation *sm, void *data)
     {
             static int IDcntr = 0;
@@ -75,11 +98,20 @@ unsigned int SEED = 5; //random number from Hardware
             data = data;
     }
 
+    /**
+     * @brief set new behavior function
+     * 
+     * @param function 
+     */
     void Process::setBehavior(void (*function)(Process *, void*))
     {
         behav = function;
     }
 
+    /**
+     * @brief call process behavior function
+     * 
+     */
     void Process::doBehavior()
     {
         if (behav) 
@@ -92,16 +124,33 @@ unsigned int SEED = 5; //random number from Hardware
         }        
     }
 
+    /**
+     * @brief Process siezes facility. Either starts working or waits in queue
+     * 
+     * @param facID ID of facility
+     * @param nextState processes state after exiting facility
+     * @param prio priority of sieze event and activation event after exiting facility
+     */
     void Process::seize(int facID, int nextState, int prio)
     {
         this->sim->seizeFacility(this->id, nextState, facID, prio);
     }
 
+    /**
+     * @brief Construct a new Facility:: Facility object
+     * 
+     * @param id facility ID
+     * @param n name
+     * @param cap capacity (how many processer can work at the same time)
+     * @param g type of generating work time
+     * @param a first value for Generating time
+     * @param b second value for Generating Ttime
+     */
     Facility::Facility(int id, std::string n, int cap, GenType g, double a, double b) : id(id), name(n), capacity(cap), gen(g), a(a), b(b)
     {
         stats.processCnt = 0;
         stats.waitTimeTotal = 0;
-        stats.usedTimeTotal = 0;
+        stats.workTimeTotal = 0;
         if (gen == GenType::Uniform && a > b)
             throw std::invalid_argument("Uniform distribution attribute 'a' cannot be less than 'b'");
     }
@@ -111,21 +160,20 @@ unsigned int SEED = 5; //random number from Hardware
         return this->id;
     }
 
-    std::ostream &operator<<(std::ostream &os, const Facility &f) // override print funciton
+    // override print funciton
+    std::ostream &operator<<(std::ostream &os, const Facility &f) 
     {
-        os << "Facility: " << f.name << "\n  processCnt   :" << f.stats.processCnt << "\n  waitTimeTotal:" << f.stats.waitTimeTotal << "\n  usedTimeTotal:" << f.stats.usedTimeTotal << "\n";
+        os << "Facility: " << f.name << "\n  processCnt   :" << f.stats.processCnt << "\n  waitTimeTotal:" << f.stats.waitTimeTotal << "\n  workTimeTotal:" << f.stats.workTimeTotal << "\n";
         return os;
     }
 
 
-    void Facility::ProcessExit(Process *proc, Event e)
-    {
-        //TODO stats
-        // std::cout << " Executing process: " << proc->id << "  " << proc->state << "->" << e.processNextState << "\n";
-        proc->state = e.processNextState;
-        proc->doBehavior();
-    }
 
+    /**
+     * @brief generatime time value based on facilitys GenType and gen values (a,b)
+     * 
+     * @return double 
+     */
     double Facility::generateTime()
     {
         switch(this->gen)
@@ -143,6 +191,12 @@ unsigned int SEED = 5; //random number from Hardware
         }
     }
     
+    /**
+     * @brief process starts working, generate time and add event when it finishes
+     * 
+     * @param proc 
+     * @param nextState 
+     */
     void Facility::activateProcess(Process* proc, int nextState)
     {
         double delay = generateTime();
@@ -151,8 +205,37 @@ unsigned int SEED = 5; //random number from Hardware
         {
             proc->sim->addFacilityEvent(proc->id, nextState, this->id, time + delay, EXIT_FACILITY_PRIO, time); 
         }
-
+        
+        //update stats
+        this->stats.workTimeTotal += time;
     };
+
+    void Facility::ProcessExit(Process *proc, Event e)
+    {
+        //TODO stats
+        proc->state = e.processNextState;
+        proc->doBehavior();
+        if (this->q.empty())
+            this->capacity++;
+        else 
+        {
+            ProcInQueue inQueue = this->q.front();
+            this->q.pop();
+            if (Verbose)
+                std::cout << "  Proc:" << inQueue.p->id << " start work in Facility: " << this->id<< "\n";
+            this->activateProcess(inQueue.p, inQueue.processNextState);
+            //update stats
+            this->stats.waitTimeTotal += e.startTime - inQueue.enteredQueueTime;
+        }
+    }
+
+    void Facility::printStats()
+    {
+        printf("%2d: %s\n", id, name.c_str());
+        printf("  process count: %d\n", stats.processCnt);
+        printf("  work time total: %.3lf\n", stats.workTimeTotal);
+        printf("  wait time total: %.3lf\n", stats.waitTimeTotal);
+    }
 
     Simulation::Simulation()
     {
@@ -160,7 +243,6 @@ unsigned int SEED = 5; //random number from Hardware
         endTime = -1;
         // sharedThis = std::shared_ptr<Simulation>(this);
     }
-
 
     double Simulation::getTime()
     // double Simulation::getTime()
@@ -209,16 +291,60 @@ unsigned int SEED = 5; //random number from Hardware
         return calendar.empty() || (this->endTime > 0 && this->time > this->endTime);
     }
 
+    /**
+     * @brief create a process and sets it's activation time to current Simulation time
+     * 
+     * @param behav process behavior function
+     * @param state process initial state
+     * @param prio activation event priority
+     * @param data process aditional data
+     */
     void Simulation::createProcess(void (*behav)(Process*, void*), int state, int prio, void* data) 
     {
-        Process p = Process(state, behav, this, nullptr);
+        Process p = Process(state, behav, this, nullptr); 
         procMap.emplace(p.id, p);
-        // procMap[p.id] = p;
         calendar.emplace(p.id, state, IgnoreID, this->time, prio, this->time); 
     }
 
+    /**
+     * @brief create a process and sets it's activation time to (current Simulation time + delay)
+     * 
+     * @param delay
+     * @param behav process behavior function
+     * @param state process initial state
+     * @param prio activation event priority
+     * @param data process aditional data
+     */
+    void Simulation::createProcessDelayed(double delay, void (*behav)(Process *, void *), int state, int prio, void *data)
+    {
+        Process p = Process(state, behav, this, nullptr); 
+        procMap.emplace(p.id, p);
+        calendar.emplace(p.id, state, IgnoreID, this->time + delay, prio, this->time); 
+    }
 
-    void Simulation::executeEvent(Event e)
+    /**
+     * @brief create a process and sets it's activation time to time from args
+     * 
+     * @param time time when process will be activated
+     * @param behav process behavior function
+     * @param state process initial state
+     * @param prio activation event priority
+     * @param data process aditional data
+     * @return true if sucessfuly created
+     * @return false if activation time < Simulation.time
+     */
+    bool Simulation::createProcessAtTime(double time, void (*behav)(Process *, void *), int state, int prio, void *data)
+    {
+        if (this->time > time)
+            return false;            
+        Process p = Process(state, behav, this, nullptr); 
+        procMap.emplace(p.id, p);
+        calendar.emplace(p.id, state, IgnoreID, time, prio, this->time); 
+        return true;
+    }
+
+
+    Event* Simulation::executeEvent(Event e)
     {
         if (e.isProcessEvent())
         {
@@ -230,10 +356,13 @@ unsigned int SEED = 5; //random number from Hardware
             else
             {
                 auto p = i->second;
-                std::cout << " Executing process: " << p.id << "  " << p.state << "->" << e.processNextState << "\n";
+                // std::cout << " proc: " << p.id << "  " << p.state << "->" << e.processNextState << "\n";
+                if (Verbose)
+                    std::cout << "  " << p.state << "->" << e.processNextState << "\n";
                 p.state = e.processNextState;
                 p.doBehavior();
             }
+            return nullptr;
         }
         else if (e.isFacilityEvent())
         {
@@ -249,12 +378,15 @@ unsigned int SEED = 5; //random number from Hardware
             }
             else
             {
-                auto f = fi->second;
+                Facility* f = &fi->second;
                 Process* p = &pi->second;
-                f.ProcessExit(p, e); // TODO test
+                if (Verbose)
+                    std::cout << "  exiting facility:" << f->id << "\n";
+                f->ProcessExit(p, e); // TODO test
             }
+            return nullptr;
         }
-        //TODO generic event?
+        return new Event(e); // TODo check
     }
 
     void Simulation::activate(int processID, int state, int prio)
@@ -296,16 +428,20 @@ unsigned int SEED = 5; //random number from Hardware
             Facility* f = &fi->second;
             Process* p = &pi->second;
             
+            //update stats        
             f->stats.processCnt++;
             if (f->capacity > 0) // processed starts working
             {
                 f->capacity--;
-                f->activateProcess(p, state);
-                
+                if (Verbose)
+                    std::cout << " start work in Facility: " << f->getId() << "\n";
+                f->activateProcess(p, state);                
             }
             else    //enter queue
-            {            
-                Facility::ProcInQueue pq = {p, state};
+            {
+                if (Verbose)
+                    std::cout << " queue enter in Facility: " << f->getId() << "\n";
+                Facility::ProcInQueue pq = {p, state, this->time};
                 f->q.push(pq);
             }
             // 
@@ -316,6 +452,21 @@ unsigned int SEED = 5; //random number from Hardware
     {
         // faci.emplace(p.id, state, IgnoreID, this->time, prio, this->time); 
         this->facMap.emplace(f.getId(), f);
+    }
+
+    /**
+     * @brief Construct a new Facility and place it into simulation facility map
+     * 
+     * @param id facility ID
+     * @param n name
+     * @param cap capacity (how many processer can work at the same time)
+     * @param g type of generating work time
+     * @param a first value for Generating time
+     * @param b second value for Generating Ttime
+     */
+    void Simulation::createFacility(int id, std::string n, int cap, Facility::GenType g, double a, double b)
+    {
+        this->facMap.emplace(id, Facility(id, n, cap, g, a, b));
     }
 
     Facility *Simulation::findFacility(int id)
@@ -329,11 +480,14 @@ unsigned int SEED = 5; //random number from Hardware
         return &fi->second;
     }
 
-    // std::shared_ptr<Simulation> Simulation::create()
-    // {
-    //     std::cout << "Creating shared Sim\n";
-    //     return std::shared_ptr<Simulation>(new Simulation());
-    // }
+    void Simulation::printFacilitysStats()
+    {
+        printf("\n----PRINT FACILITY STATS----\n");
+        for (auto& i : facMap) {
+            // Call printStats() on the Facility object associated with each key
+            i.second.printStats();
+        }
+    }
 
     // Simulation::~Simulation()
     // {

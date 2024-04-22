@@ -12,6 +12,9 @@ $(TARGET): $(OBJS)
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
+run: $(TARGET)
+	./$(TARGET)
+
 .PHONY: clean
 clean:
 	rm -f $(OBJS) $(TARGET)

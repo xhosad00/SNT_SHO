@@ -1,0 +1,26 @@
+-diskrétní modelování a simulaci založenou na událostech,
+-implementovat demonstrační příklad/model systému hromadné obsluhy.
+-transakce (proces) v událostně řízené simulaci
+
+Knihovna nechť obsahuje:
+statistiky front, obslužných linek (počet přístupů, doby čekání, využití linky)
+
+Demonstrační příklad
+Systém hromadné obsluhy s generováním transakcí. Nejméně dvě obslužné linky (F1, F2, ...). Transakce přistoupí (postupně) ke všem linkám (obsluha na první lince, pak na druhé, atd).
+
+
+DONE:
+podporu pro specifikaci záznamů o naplánovaných událostech (aktivace procesu do zadaneho stavu)
+algoritmus řízení simulace Next-Event
+generátory pseudonáhodných čísel (rovnoměrné rozložení, exponenciální, normální)
+podporu pro obslužnou linku Facility a fronty
+
+
+
+Technická zpráva
+Zpráva nechť obsahuje:
+popis knihovny
+popis modelu
+demonstraci funkčnosti modelu
+
+
