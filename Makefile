@@ -18,3 +18,7 @@ run: $(TARGET)
 .PHONY: clean
 clean:
 	rm -f $(OBJS) $(TARGET)
+
+.PHONY: cleanDocs
+cleanDocs:
+	rm -r ./docs
